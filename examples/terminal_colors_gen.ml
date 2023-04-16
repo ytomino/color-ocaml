@@ -210,6 +210,7 @@ let normal_min, normal_max = ref 0, ref 0xBF;;
 let bright_min, bright_max = ref 0x66, ref 0xE5;;
 
 let decimal = ref false;;
+let order = ref `lrgb;;
 
 exception Unknown_option of string;;
 exception Missing_value of string;;
@@ -234,6 +235,8 @@ let usage () = (
 	print_endline "output:";
 	print_endline "  -d --decimal      print as decimal";
 	print_endline "  -x --hexadecimal  print as hexadecimal (default)";
+	print_endline "     --lrgb         order light, red, green, blue (default)";
+	print_endline "     --rgbl         order red, green, blue, light";
 	print_newline ();
 	Printf.printf "example: %s --luminance-proportion --normal 00:BF\n" command
 ) in
@@ -303,6 +306,12 @@ try
 			| "-x" | "--hexadecimal" ->
 				decimal := false;
 				i + 1
+			| "--lrgb" ->
+				order := `lrgb;
+				i + 1
+			| "--rgbl" ->
+				order := `rgbl;
+				i + 1
 			| "--help" ->
 				usage ();
 				exit 1
@@ -334,31 +343,39 @@ let process prefix black white ~red ~green ~blue = (
 	);
 	Printf.printf " %s\n" name
 ) in
-let process_rgb prefix black white = (
+let process_rgb f = (
 	for blue = 0 to 1 do
 		let blue = blue > 0 in
 		for green = 0 to 1 do
 			let green = green > 0 in
 			for red = 0 to 1 do
 				let red = red > 0 in
-				process prefix black white ~red ~green ~blue
+				f ~red ~green ~blue
 			done
 		done
 	done
 ) in
-let process_l () = (
+let process_l f = (
 	if !faint_max > 0 then (
 		let faint_black = grayscale_rgb_of_srgb24 !faint_min in
 		let faint_white = grayscale_rgb_of_srgb24 !faint_max in
-		process_rgb "faint " faint_black faint_white
+		f "faint " faint_black faint_white
 	);
 	let normal_black = grayscale_rgb_of_srgb24 !normal_min in
 	let normal_white = grayscale_rgb_of_srgb24 !normal_max in
-	process_rgb "" normal_black normal_white;
+	f "" normal_black normal_white;
 	if !bright_max > 0 then (
 		let bright_black = grayscale_rgb_of_srgb24 !bright_min in
 		let bright_white = grayscale_rgb_of_srgb24 !bright_max in
-		process_rgb "bright" bright_black bright_white
+		f "bright" bright_black bright_white
 	)
 ) in
-process_l ();;
+match !order with
+| `lrgb ->
+	process_l (fun prefix black white ->
+		process_rgb (process prefix black white)
+	)
+| `rgbl ->
+	process_rgb (fun ~red ~green ~blue ->
+		process_l (process ~red ~green ~blue)
+	);;
