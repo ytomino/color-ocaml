@@ -127,6 +127,27 @@ let luminance_third ~(red: bool) ~(green: bool) ~(blue: bool) (black: float)
 	make_rgb_with_luminance unit_hsv target
 );;
 
+(* luminance third mg:
+   This is similar to luminance third, except luminances of green and magenta
+   are swapped.
+   Red, blue, and magenta have 1/3 luminance of between white and black.
+   Green, Yellow, and cyan have 2/3 luminance of between white and black. *)
+let luminance_third_mg ~(red: bool) ~(green: bool) ~(blue: bool) (black: float)
+	(white: float) =
+(
+	let third_num =
+		let elt_count = Bool.to_int red + Bool.to_int green + Bool.to_int blue in
+		float_of_int (
+			if elt_count = 1 && green then 2 else
+			if elt_count = 2 && red && blue then 1 else
+			elt_count
+		) (* 3 times *)
+	in
+	let target = (white -. black) *. third_num /. 3. +. black in
+	let unit_hsv = hsv_of_bool ~red ~green ~blue in
+	make_rgb_with_luminance unit_hsv target
+);;
+
 (* luminance upper:
    Red, blue have same luminance as green.
    Magenta and cyan have same luminance as yellow. *)
@@ -202,6 +223,7 @@ let usage () = (
 	print_endline "  -F --flat                  use flat logic (default)";
 	print_endline "  -P --luminance-proportion  use luminance proportion logic";
 	print_endline "  -T --luminance-third       use luminance third logic";
+	print_endline "     --luminance-third-mg    green and magenta are swapped";
 	print_endline "  -U --luminance-upper       use luminance upper logic";
 	print_endline "range:";
 	Printf.printf "     --faint  %s  set faint black and white (none)\n" range;
@@ -244,6 +266,9 @@ try
 				i + 1
 			| "-T" | "--luminance-third" ->
 				logic := luminance_third;
+				i + 1
+			| "--luminance-third-mg" ->
+				logic := luminance_third_mg;
 				i + 1
 			| "-U" | "--luminance-upper" ->
 				logic := luminance_upper;
