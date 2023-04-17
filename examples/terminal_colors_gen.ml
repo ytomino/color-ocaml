@@ -15,10 +15,10 @@ let hsv_of_bool ~(red: bool) ~(green: bool) ~(blue: bool) = (
 
 (* logic: flat *)
 
-let flat ~(red: bool) ~(green: bool) ~(blue: bool) (black: float)
-	(white: float) =
+let flat (filter: Color.hsv_t -> Color.hsv_t) ~(red: bool) ~(green: bool)
+	~(blue: bool) (black: float) (white: float) =
 (
-	let unit_hsv = hsv_of_bool ~red ~green ~blue in
+	let unit_hsv = filter (hsv_of_bool ~red ~green ~blue) in
 	let {Color.HSV.hue; saturation; value} = unit_hsv in
 	let value = (white -. black) *. value +. black in
 	let saturation =
@@ -46,14 +46,41 @@ let luminance_of_array (a: float array) = (
 		+. luminance_num.(2) *. a.(2)
 );; (* 10 times *)
 
-let fix_over (a: float array) = (
+let fix_over (luminance: float) (a: float array) = (
 	let fix_over_1 i a = (
 		assert (a.(i) >= 1.);
-		let over = luminance_num.(i) *. (a.(i) -. 1.) in (* 10 times *)
-		let b = over /. (luminance_den -. luminance_num.(i)) in
-		a.(i) <- 1.;
-		let j1 = (i + 1) mod 3 in a.(j1) <- a.(j1) +. b;
-		let j2 = (i + 2) mod 3 in a.(j2) <- a.(j2) +. b
+		let j1 = (i + 1) mod 3 in
+		let j2 = (i + 2) mod 3 in
+		if a.(j1) = a.(j2) then (
+			let over = luminance_num.(i) *. (a.(i) -. 1.) in (* 10 times *)
+			let b = over /. (luminance_den -. luminance_num.(i)) in
+			a.(i) <- 1.;
+			a.(j1) <- a.(j1) +. b;
+			a.(j2) <- a.(j2) +. b
+		) else (
+			let mid, min = if a.(j1) >= a.(j2) then j1, j2 else j2, j1 in
+			(* keep hue if possible *)
+			let d = (a.(i) -. a.(mid)) /. (a.(i) -. a.(min)) in
+			(* luminance = L(i) + L(mid) * (1 - s * d) + L(min) * (1 - s)
+			   luminance = L(i) + L(mid) - L(mid) * s * d + L(min) - L(min) * s
+			   luminance = 1 - (L(mid) * d + L(min)) * s
+			   (L(mid) * d + L(min)) * s = 1 - luminance
+			   s = (1 - luminance) / (L(mid) * d + L(min)) *)
+			let s =
+				luminance_den *. (1. -. luminance)
+					/. (luminance_num.(mid) *. d +. luminance_num.(min))
+			in
+			a.(i) <- 1.;
+			a.(mid) <- 1. -. s *. d;
+			a.(min) <- 1. -. s;
+			if a.(mid) > 1. then (
+				Printf.printf "snd\n";
+				let over = luminance_num.(mid) *. (a.(mid) -. 1.) in (* 10 times *)
+				let c = over /. luminance_num.(min) in
+				a.(mid) <- 1.;
+				a.(min) <- a.(min) +. c
+			)
+		)
 	) in
 	let fix_over_2 j a = (
 		let i1 = (j + 1) mod 3 in
@@ -90,15 +117,15 @@ let make_rgb_with_luminance (unit_hsv: Color.hsv_t) (luminance: float) = (
 		let open Color.RGB in
 		[| c *. unit_rgb.red; c *. unit_rgb.green; c *. unit_rgb.blue |]
 	in
-	fix_over a;
+	fix_over luminance a;
 	assert (abs_float (luminance_of_array a -. target_num) < 0.001);
 	Color.RGB.make ~red:a.(0) ~green:a.(1) ~blue:a.(2)
 );;
 
 (* luminance proportion:
    The changing of luminance from black to white is in direct proportion. *)
-let luminance_proportion ~(red: bool) ~(green: bool) ~(blue: bool)
-	(black: float) (white: float) =
+let luminance_proportion (filter: Color.hsv_t -> Color.hsv_t) ~(red: bool)
+	~(green: bool) ~(blue: bool) (black: float) (white: float) =
 (
 	let seventh_num =
 		(if red then 2. else 0.)
@@ -107,15 +134,15 @@ let luminance_proportion ~(red: bool) ~(green: bool) ~(blue: bool)
 		(* 7 times *)
 	in
 	let target = (white -. black) *. seventh_num /. 7. +. black in
-	let unit_hsv = hsv_of_bool ~red ~green ~blue in
+	let unit_hsv = filter (hsv_of_bool ~red ~green ~blue) in
 	make_rgb_with_luminance unit_hsv target
 );;
 
 (* luminance third:
    Red, green, and blue have 1/3 luminance of between white and black.
    Yellow, magenta, and cyan have 2/3 luminance of between white and black. *)
-let luminance_third ~(red: bool) ~(green: bool) ~(blue: bool) (black: float)
-	(white: float) =
+let luminance_third (filter: Color.hsv_t -> Color.hsv_t) ~(red: bool)
+	~(green: bool) ~(blue: bool) (black: float) (white: float) =
 (
 	let third_num =
 		let elt_count = Bool.to_int red + Bool.to_int green + Bool.to_int blue in
@@ -123,7 +150,7 @@ let luminance_third ~(red: bool) ~(green: bool) ~(blue: bool) (black: float)
 		(* 3 times *)
 	in
 	let target = (white -. black) *. third_num /. 3. +. black in
-	let unit_hsv = hsv_of_bool ~red ~green ~blue in
+	let unit_hsv = filter (hsv_of_bool ~red ~green ~blue) in
 	make_rgb_with_luminance unit_hsv target
 );;
 
@@ -132,8 +159,8 @@ let luminance_third ~(red: bool) ~(green: bool) ~(blue: bool) (black: float)
    are swapped.
    Red, blue, and magenta have 1/3 luminance of between white and black.
    Green, Yellow, and cyan have 2/3 luminance of between white and black. *)
-let luminance_third_mg ~(red: bool) ~(green: bool) ~(blue: bool) (black: float)
-	(white: float) =
+let luminance_third_mg (filter: Color.hsv_t -> Color.hsv_t) ~(red: bool)
+	~(green: bool) ~(blue: bool) (black: float) (white: float) =
 (
 	let third_num =
 		let elt_count = Bool.to_int red + Bool.to_int green + Bool.to_int blue in
@@ -144,15 +171,15 @@ let luminance_third_mg ~(red: bool) ~(green: bool) ~(blue: bool) (black: float)
 		) (* 3 times *)
 	in
 	let target = (white -. black) *. third_num /. 3. +. black in
-	let unit_hsv = hsv_of_bool ~red ~green ~blue in
+	let unit_hsv = filter (hsv_of_bool ~red ~green ~blue) in
 	make_rgb_with_luminance unit_hsv target
 );;
 
 (* luminance upper:
    Red, blue have same luminance as green.
    Magenta and cyan have same luminance as yellow. *)
-let luminance_upper ~(red: bool) ~(green: bool) ~(blue: bool) (black: float)
-	(white: float) =
+let luminance_upper (filter: Color.hsv_t -> Color.hsv_t) ~(red: bool)
+	~(green: bool) ~(blue: bool) (black: float) (white: float) =
 (
 	let luminance_num =
 		let elt_count = Bool.to_int red + Bool.to_int green + Bool.to_int blue in
@@ -162,8 +189,24 @@ let luminance_upper ~(red: bool) ~(green: bool) ~(blue: bool) (black: float)
 		(* 10 times *)
 	in
 	let target = (white -. black) *. luminance_num /. luminance_den +. black in
-	let unit_hsv = hsv_of_bool ~red ~green ~blue in
+	let unit_hsv = filter (hsv_of_bool ~red ~green ~blue) in
 	make_rgb_with_luminance unit_hsv target
+);;
+
+(* filter: add hue *)
+
+let double_pi = 2. *. Float.pi;;
+
+let rec round_double_pi (x: float) = (
+	if x > double_pi then round_double_pi (x -. double_pi) else
+	if x < 0. then round_double_pi (x +. double_pi) else
+	x
+);;
+
+let add_hue (rad: float) (unit_hsv: Color.hsv_t) = (
+	let {Color.HSV.hue; saturation; value} = unit_hsv in
+	let hue = round_double_pi (hue +. rad) in
+	Color.HSV.make ~hue ~saturation ~value
 );;
 
 (* name *)
@@ -204,6 +247,7 @@ let srgb24_of_rgb (rgb: Color.rgb_t) = (
 );;
 
 let logic = ref flat;;
+let filter = ref (fun x -> x);;
 
 let faint_min, faint_max = ref 0, ref 0;;
 let normal_min, normal_max = ref 0, ref 0xBF;;
@@ -226,6 +270,8 @@ let usage () = (
 	print_endline "  -T --luminance-third       use luminance third logic";
 	print_endline "     --luminance-third-mg    green and magenta are swapped";
 	print_endline "  -U --luminance-upper       use luminance upper logic";
+	print_endline "filter:";
+	print_endline "     --add-hue RAD  rotate hue by specified angle";
 	print_endline "range:";
 	Printf.printf "     --faint  %s  set faint black and white (none)\n" range;
 	Printf.printf "     --normal %s  set normal black and white (%02X:%02X)\n"
@@ -245,6 +291,11 @@ let not_hexadecimal_value s = (
 ) in
 let out_of_range s = (
 	Bad_value (s, "out of range")
+) in
+let parse_float arg = (
+	match float_of_string_opt arg with
+	| Some rad ->	rad
+	| None -> raise (Bad_value (arg, "not float value"))
 ) in
 let parse_range ~min arg = (
 	try
@@ -276,6 +327,15 @@ try
 			| "-U" | "--luminance-upper" ->
 				logic := luminance_upper;
 				i + 1
+			| "--add-hue" as option ->
+				if i + 1 >= Array.length Sys.argv then raise (Missing_value option) else
+				let rad = parse_float Sys.argv.(i + 1) in
+				if Float.is_infinite rad || abs_float rad > double_pi then
+					raise (out_of_range Sys.argv.(i + 1))
+				else (
+					filter := add_hue rad;
+					i + 2
+				)
 			| "--faint" as option ->
 				if i + 1 >= Array.length Sys.argv then raise (Missing_value option) else
 				let min, max = parse_range ~min:!faint_min Sys.argv.(i + 1) in
@@ -332,7 +392,7 @@ with
 	exit 1;;
 
 let process prefix black white ~red ~green ~blue = (
-	let c = !logic ~red ~green ~blue black white in
+	let c = !logic !filter ~red ~green ~blue black white in
 	let s = srgb24_of_rgb c in
 	let name = prefix ^ name ~red ~green ~blue in
 	let open SRGB24 in
