@@ -256,6 +256,8 @@ let bright_min, bright_max = ref 0x66, ref 0xE5;;
 let decimal = ref false;;
 let order = ref `lrgb;;
 
+let print_sample = ref false;;
+
 exception Unknown_option of string;;
 exception Missing_value of string;;
 exception Bad_value of string * string;;
@@ -279,10 +281,11 @@ let usage () = (
 	Printf.printf "     --bright %s  set bright black and white (%02X:%02X)\n"
 		range !bright_min !bright_max;
 	print_endline "output:";
-	print_endline "  -d --decimal      print as decimal";
-	print_endline "  -x --hexadecimal  print as hexadecimal (default)";
-	print_endline "     --lrgb         order light, red, green, blue (default)";
-	print_endline "     --rgbl         order red, green, blue, light";
+	print_endline "  -d --decimal       print as decimal";
+	print_endline "  -x --hexadecimal   print as hexadecimal (default)";
+	print_endline "     --lrgb          order light, red, green, blue (default)";
+	print_endline "     --rgbl          order red, green, blue, light";
+	print_endline "     --print-sample  print true color escape sequence samples";
 	print_newline ();
 	Printf.printf "example: %s --luminance-proportion --normal 00:BF\n" command
 ) in
@@ -372,6 +375,9 @@ try
 			| "--rgbl" ->
 				order := `rgbl;
 				i + 1
+			| "--print-sample" ->
+				print_sample := true;
+				i + 1
 			| "--help" ->
 				usage ();
 				exit 1
@@ -401,7 +407,15 @@ let process prefix black white ~red ~green ~blue = (
 	) else (
 		Printf.printf "#%02X%02X%02X" s.red s.green s.blue
 	);
-	Printf.printf " %s\n" name
+	if !print_sample then (
+		for i = 3 to 4 do
+			(* 13 = String.length "brightmagenta" *)
+			Printf.printf " \x1b[%d8;2;%d;%d;%dm%-13s\x1b[0m" i s.red s.green s.blue name
+		done
+	) else (
+		Printf.printf " %s" name
+	);
+	print_newline ()
 ) in
 let process_rgb f = (
 	for blue = 0 to 1 do
