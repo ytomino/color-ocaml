@@ -1,7 +1,7 @@
 include Makefile.variables
 
-MLI=color.mli
-MLSRC=color.ml
+MLI=color.mli color__SRGB24.mli
+MLSRC=color.ml color__SRGB24.ml
 MLINIT=
 CSRC=
 
@@ -16,3 +16,8 @@ LDLIB=
 CCLIB=
 
 include Makefile.rules
+
+$(BUILDDIR)/color.cmo $(BUILDDIR)/color.cmx $(BUILDDIR)/color.cmi: \
+	private override OCAMLCFLAGS+=-no-alias-deps -w -49
+$(BUILDDIR)/color__SRGB24.cmi: $(BUILDDIR)/color.cmi
+$(BUILDDIR)/color__SRGB24.cmx: $(BUILDDIR)/color.cmx

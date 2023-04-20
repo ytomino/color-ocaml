@@ -33,7 +33,7 @@ val is_valid_srgb: srgb_t -> bool
 val srgb_of_rgb: rgb_t -> srgb_t
 val rgb_of_srgb: srgb_t -> rgb_t
 
-module SRGB_Int (_: sig val max_int: int end): sig
+module type SRGB_IntS = sig
 	type t = {red: int; green: int; blue: int}
 	
 	val is_valid: t -> bool
@@ -41,6 +41,10 @@ module SRGB_Int (_: sig val max_int: int end): sig
 	val of_srgb: srgb_t -> t
 	val to_srgb: t -> srgb_t
 end
+
+module SRGB_Int (_: sig val max_int: int end): SRGB_IntS
+
+module SRGB24 = Color__SRGB24
 
 (* HSV *)
 
