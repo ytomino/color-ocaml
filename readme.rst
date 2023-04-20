@@ -4,7 +4,8 @@ very very simple color library for Objective-Caml
 What's this?
 ------------
 
-This library has simple purpose for converting between RGB/sRGB/HSV/HSL.
+This library has simple purpose for converting between
+RGB/sRGB/HSV/HSL/HSY/HSI.
 
 Prerequisites
 -------------
@@ -43,6 +44,6 @@ Build examples
 Note
 ----
 
-RGB/HSV/HSL are linear.
+RGB/HSV/HSL/HSY/HSI are linear.
 sRGB is gamma corrected for display.
 Some calculations should be performed on linear types.
