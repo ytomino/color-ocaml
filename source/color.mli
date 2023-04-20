@@ -97,3 +97,5 @@ module HSY
 		val green: float
 		val blue: float
 	end): HSYS
+
+module HSI = Color__HSI

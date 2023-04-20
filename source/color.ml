@@ -362,3 +362,5 @@ struct
 		) else
 		invalid_arg "HSY.to_rgb";;
 end;;
+
+module HSI = Color__HSI;;
