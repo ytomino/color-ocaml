@@ -79,3 +79,21 @@ type hsl_t = HSL.t
 val is_valid_hsl: hsl_t -> bool
 val hsl_of_rgb: rgb_t -> hsl_t
 val rgb_of_hsl: hsl_t -> rgb_t
+
+(* HSY *)
+
+module type HSYS = sig
+	type t = {hue: float; saturation: float; intensity: float}
+	
+	val is_valid: t -> bool
+	val make: hue:float -> saturation:float -> intensity:float -> t
+	val of_rgb: rgb_t -> t
+	val to_rgb: t -> rgb_t
+end
+
+module HSY
+	(_: sig
+		val red: float
+		val green: float
+		val blue: float
+	end): HSYS

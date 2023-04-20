@@ -1,5 +1,12 @@
 let diff = 0x0001p-16;;
 
+module HSI =
+	Color.HSY (struct
+		let red = 1.0;;
+		let green = 1.0;;
+		let blue = 1.0;;
+	end);;
+
 for ired = 0 to 4 do
 	for igreen = 0 to 4 do
 		for iblue = 0 to 4 do
@@ -17,7 +24,11 @@ for ired = 0 to 4 do
 			(* HSL *)
 			let hsl = Color.hsl_of_rgb rgb in
 			let via_hsl = Color.rgb_of_hsl hsl in
-			assert (Color.RGB.distance via_hsl rgb < diff)
+			assert (Color.RGB.distance via_hsl rgb < diff);
+			(* HSI *)
+			let hsi = HSI.of_rgb rgb in
+			let via_hsi = HSI.to_rgb hsi in
+			assert (Color.RGB.distance via_hsi rgb < diff)
 		done
 	done
 done;;

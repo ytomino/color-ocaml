@@ -136,7 +136,7 @@ let min_max_3 red green blue =
 	if green <= blue then green, red else
 	blue, red;;
 
-let to_hue {RGB.red; green; blue} d max =
+let to_hue_6 {RGB.red; green; blue} d max =
 	if d = 0.0 then 0.0 else
 	let result =
 		if green = max then 2.0 *. d +. (blue -. red) else
@@ -145,7 +145,10 @@ let to_hue {RGB.red; green; blue} d max =
 		if result >= 0.0 then result else
 		6.0 *. d +. result
 	in
-	2.0 *. Float.pi /. 6.0 *. result /. d;;
+	result /. d;;
+
+let to_hue x d max =
+	2.0 *. Float.pi /. 6.0 *. to_hue_6 x d max;;
 
 type hsv_t = {hue: float; saturation: float; value: float};;
 
@@ -253,4 +256,109 @@ module HSL = struct
 	let of_rgb = hsl_of_rgb;;
 	
 	let to_rgb = rgb_of_hsl;;
+end;;
+
+(* HSY *)
+
+module type HSYS = sig
+	type t = {hue: float; saturation: float; intensity: float}
+	
+	val is_valid: t -> bool
+	val make: hue:float -> saturation:float -> intensity:float -> t
+	val of_rgb: rgb_t -> t
+	val to_rgb: t -> rgb_t
+end;;
+
+module HSY
+	(Param: sig
+		val red: float
+		val green: float
+		val blue: float
+	end): HSYS =
+struct
+	type t = {hue: float; saturation: float; intensity: float};;
+	
+	let param_den = Param.red +. Param.green +. Param.blue;;
+	
+	let luma ~red ~green ~blue =
+		(Param.red *. red +. Param.green *. green +. Param.blue *. blue) /. param_den;;
+	
+	let max_sat hue_6 =
+		(
+			if hue_6 < 1.0 then Param.red +. Param.green *. hue_6 else
+			if hue_6 < 2.0 then Param.green +. Param.red *. (1.0 -. (hue_6 -. 1.0)) else
+			if hue_6 < 3.0 then Param.green +. Param.blue *. (hue_6 -. 2.0) else
+			if hue_6 < 4.0 then Param.blue +. Param.green *. (1.0 -. (hue_6 -. 3.0)) else
+			if hue_6 < 5.0 then Param.blue +. Param.red *. (hue_6 -. 4.0) else
+			Param.red +. Param.blue *. (1.0 -. (hue_6 -. 5.0))
+		) /. param_den;;
+	
+	let is_valid {hue; saturation; intensity} =
+		hue >= 0.0 && hue < 2. *. Float.pi
+			&& saturation >= 0.0 && saturation <= 1.0
+			&& intensity >= 0.0 && intensity <= 1.0;;
+	
+	let make ~hue ~saturation ~intensity =
+		let result = {hue; saturation; intensity} in
+		if is_valid result then result else
+		invalid_arg "HSY.make";;
+	
+	let of_rgb ({RGB.red; green; blue} as x: rgb_t) =
+		if is_valid_rgb x then (
+			let intensity = luma ~red ~green ~blue in
+			let min, max = min_max_3 red green blue in
+			if min < max then (
+				let d = max -. min in
+				let hue_6 = to_hue_6 x d max in
+				let hue = 2.0 *. Float.pi *. hue_6 /. 6.0 in
+				let saturation =
+					let max_sat = max_sat hue_6 in
+					if intensity <= max_sat then d *. max_sat /. intensity else
+					d *. (1.0 -. max_sat) /. (1.0 -. intensity)
+				in
+				let saturation =
+					if saturation <= 1.0 then saturation else (
+						assert (saturation -. 1.0 < 0x1.0p-12);
+						1.0
+					) (* fix computation error *)
+				in
+				{hue; saturation; intensity}
+			) else
+			{hue = 0.0; saturation = 0.0; intensity}
+		) else
+		invalid_arg "HSY.of_rgb";;
+	
+	let to_rgb ({hue; saturation; intensity} as x: t) =
+		if is_valid x then (
+			let hue_3 = 3.0 /. (2.0 *. Float.pi) *. hue in
+			let d, _ = modf hue_3 in
+			let hue_6 = 2.0 *. hue_3 in
+			let max =
+				let max_sat = max_sat hue_6 in
+				if intensity <= max_sat then saturation *. intensity /. max_sat else
+				saturation *. (1.0 -. intensity) /. (1.0 -. max_sat)
+			in
+			let mid = (1.0 -. abs_float (2.0 *. d -. 1.0)) *. max in
+			let min = 0.0 in
+			let red, green, blue =
+				if hue_6 < 1.0 then max, mid, min else
+				if hue_6 < 2.0 then mid, max, min else
+				if hue_6 < 3.0 then min, max, mid else
+				if hue_6 < 4.0 then min, mid, max else
+				if hue_6 < 5.0 then mid, min, max else
+				max, min, mid
+			in
+			let m = intensity -. luma ~red ~green ~blue in
+			let m =
+				if m >= 0.0 then m else (
+					assert (m > -. 0x1.0p-12);
+					0.0
+				) (* ignore computation error *)
+			in
+			let red = red +. m in
+			let green = green +. m in
+			let blue = blue +. m in
+			{RGB.red; green; blue}
+		) else
+		invalid_arg "HSY.to_rgb";;
 end;;

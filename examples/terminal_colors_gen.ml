@@ -30,96 +30,20 @@ let flat (filter: Color.hsv_t -> Color.hsv_t) ~(red: bool) ~(green: bool)
 
 (* logic: luminance proportion / third / upper *)
 
-let luminance_num = [| 3.; 6.; 1. |];;  (* 10 times *)
-let luminance_den = 10.;;
+module Luminance = struct
+	let red = 3.;;
+	let green = 6.;;
+	let blue = 1.;;
+	let den = 10.;;
+end;; (* 10 times *)
 
-let luminance_of_rgb (x: Color.rgb_t) = (
-	luminance_num.(0) *. x.Color.RGB.red
-		+. luminance_num.(1) *. x.Color.RGB.green
-		+. luminance_num.(2) *. x.Color.RGB.blue
-);; (* 10 times *)
-
-let luminance_of_array (a: float array) = (
-	assert (Array.length a = 3);
-	luminance_num.(0) *. a.(0)
-		+. luminance_num.(1) *. a.(1)
-		+. luminance_num.(2) *. a.(2)
-);; (* 10 times *)
-
-let fix_over (luminance: float) (a: float array) = (
-	let fix_over_1 i a = (
-		assert (a.(i) >= 1.);
-		let j1 = (i + 1) mod 3 in
-		let j2 = (i + 2) mod 3 in
-		if a.(j1) = a.(j2) then (
-			let over = luminance_num.(i) *. (a.(i) -. 1.) in (* 10 times *)
-			let b = over /. (luminance_den -. luminance_num.(i)) in
-			a.(i) <- 1.;
-			a.(j1) <- a.(j1) +. b;
-			a.(j2) <- a.(j2) +. b
-		) else (
-			let mid, min = if a.(j1) >= a.(j2) then j1, j2 else j2, j1 in
-			(* keep hue if possible *)
-			let d = (a.(i) -. a.(mid)) /. (a.(i) -. a.(min)) in
-			(* luminance = L(i) + L(mid) * (1 - s * d) + L(min) * (1 - s)
-			   luminance = L(i) + L(mid) - L(mid) * s * d + L(min) - L(min) * s
-			   luminance = 1 - (L(mid) * d + L(min)) * s
-			   (L(mid) * d + L(min)) * s = 1 - luminance
-			   s = (1 - luminance) / (L(mid) * d + L(min)) *)
-			let s =
-				luminance_den *. (1. -. luminance)
-					/. (luminance_num.(mid) *. d +. luminance_num.(min))
-			in
-			a.(i) <- 1.;
-			a.(mid) <- 1. -. s *. d;
-			a.(min) <- 1. -. s;
-			if a.(mid) > 1. then (
-				Printf.printf "snd\n";
-				let over = luminance_num.(mid) *. (a.(mid) -. 1.) in (* 10 times *)
-				let c = over /. luminance_num.(min) in
-				a.(mid) <- 1.;
-				a.(min) <- a.(min) +. c
-			)
-		)
-	) in
-	let fix_over_2 j a = (
-		let i1 = (j + 1) mod 3 in
-		let i2 = (j + 2) mod 3 in
-		assert (a.(i1) >= 1. && a.(i2) >= 1.);
-		assert (abs_float (a.(i1) -. a.(i2)) < 0.0001);
-		let over =
-			luminance_num.(i1) *. (a.(i1) -. 1.) +. luminance_num.(i2) *. (a.(i2) -. 1.)
-			(* 10 times *)
-		in
-		a.(i1) <- 1.;
-		a.(i2) <- 1.;
-		a.(j) <- Float.min 1. (a.(j) +. over /. luminance_num.(j))
-	) in
-	let max = Float.max a.(0) (Float.max a.(1) a.(2)) in
-	if max > 1. then (
-		if a.(1) = max && a.(2) = max then fix_over_2 0 a else
-		if a.(0) = max && a.(2) = max then fix_over_2 1 a else
-		if a.(0) = max && a.(1) = max then fix_over_2 2 a else
-		if a.(0) = max then fix_over_1 0 a else
-		if a.(1) = max then fix_over_1 1 a else
-		if a.(2) = max then fix_over_1 2 a
-	);
-	assert (a.(0) <= 1. && a.(1) <= 1. && a.(2) <= 1.)
-);;
+module HSY = Color.HSY (Luminance);;
 
 let make_rgb_with_luminance (unit_hsv: Color.hsv_t) (luminance: float) = (
-	let target_num = luminance_den *. luminance in (* 10 times *)
-	let a =
-		let open Color.HSV in
-		if unit_hsv.value = 0. then [| luminance; luminance; luminance |] else
-		let unit_rgb = Color.rgb_of_hsv unit_hsv in
-		let c = target_num /. luminance_of_rgb unit_rgb in
-		let open Color.RGB in
-		[| c *. unit_rgb.red; c *. unit_rgb.green; c *. unit_rgb.blue |]
-	in
-	fix_over luminance a;
-	assert (abs_float (luminance_of_array a -. target_num) < 0.001);
-	Color.RGB.make ~red:a.(0) ~green:a.(1) ~blue:a.(2)
+	let unit_rgb = Color.rgb_of_hsv unit_hsv in
+	let unit_hsy = HSY.of_rgb unit_rgb in
+	let hsy = {unit_hsy with HSY.intensity = luminance} in
+	HSY.to_rgb hsy
 );;
 
 (* luminance proportion:
@@ -183,12 +107,12 @@ let luminance_upper (filter: Color.hsv_t -> Color.hsv_t) ~(red: bool)
 (
 	let luminance_num =
 		let elt_count = Bool.to_int red + Bool.to_int green + Bool.to_int blue in
-		(if elt_count >= 2 then luminance_num.(0) else 0.)
-			+. (if elt_count >= 1 then luminance_num.(1) else 0.)
-			+. (if elt_count >= 3 then luminance_num.(2) else 0.)
+		(if elt_count >= 2 then Luminance.red else 0.)
+			+. (if elt_count >= 1 then Luminance.green else 0.)
+			+. (if elt_count >= 3 then Luminance.blue else 0.)
 		(* 10 times *)
 	in
-	let target = (white -. black) *. luminance_num /. luminance_den +. black in
+	let target = (white -. black) *. luminance_num /. Luminance.den +. black in
 	let unit_hsv = filter (hsv_of_bool ~red ~green ~blue) in
 	make_rgb_with_luminance unit_hsv target
 );;
