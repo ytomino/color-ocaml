@@ -156,16 +156,10 @@ let min_int (x: int) (y: int) = (
 
 let grayscale_rgb_of_srgb24 (value: int) = (
 	let c =
-		Color.rgb_of_srgb (
-			Color.SRGB24.to_srgb (Color.SRGB24.make ~red:value ~green:value ~blue:value)
-		)
+		Color.SRGB24.to_rgb (Color.SRGB24.make ~red:value ~green:value ~blue:value)
 	in
 	let open Color.RGB in
 	c.green
-);;
-
-let srgb24_of_rgb (rgb: Color.rgb_t) = (
-	Color.SRGB24.of_srgb (Color.srgb_of_rgb rgb)
 );;
 
 let logic = ref flat;;
@@ -321,7 +315,7 @@ with
 
 let process prefix black white ~red ~green ~blue = (
 	let c = !logic !filter ~red ~green ~blue black white in
-	let s = srgb24_of_rgb c in
+	let s = Color.SRGB24.of_rgb c in
 	let name = prefix ^ name ~red ~green ~blue in
 	let open Color.SRGB24 in
 	if !decimal then (

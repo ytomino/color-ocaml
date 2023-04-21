@@ -40,6 +40,8 @@ module type SRGB_IntS = sig
 	val make: red:int -> green:int -> blue:int -> t
 	val of_srgb: srgb_t -> t
 	val to_srgb: t -> srgb_t
+	val of_rgb: rgb_t -> t
+	val to_rgb: t -> rgb_t
 end
 
 module SRGB_Int (_: sig val max_int: int end): SRGB_IntS
