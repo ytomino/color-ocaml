@@ -85,6 +85,8 @@ module type SRGB_IntS = sig
 	val make: red:int -> green:int -> blue:int -> t
 	val of_srgb: srgb_t -> t
 	val to_srgb: t -> srgb_t
+	val of_rgb: rgb_t -> t
+	val to_rgb: t -> rgb_t
 end;;
 
 module SRGB_Int (Param: sig val max_int: int end) = struct
@@ -117,6 +119,12 @@ module SRGB_Int (Param: sig val max_int: int end) = struct
 			{SRGB.red = convert red; green = convert green; blue = convert blue}
 		) else
 		invalid_arg "SRGB_Int.to_srgb";;
+	
+	let of_rgb (x: rgb_t) =
+		of_srgb (srgb_of_rgb x);;
+	
+	let to_rgb (x: t) =
+		rgb_of_srgb (to_srgb x);;
 end;;
 
 module SRGB24 = Color__SRGB24;;
