@@ -15,8 +15,8 @@ let hsv_of_bool ~(red: bool) ~(green: bool) ~(blue: bool) = (
 
 (* logic: flat *)
 
-let flat (filter: Color.hsv_t -> Color.hsv_t) ~(red: bool) ~(green: bool)
-	~(blue: bool) (black: float) (white: float) =
+let flat (filter: Color.hsv_t -> Color.hsv_t) ~(maximize_saturation: bool)
+	~(red: bool) ~(green: bool) ~(blue: bool) (black: float) (white: float) =
 (
 	let unit_hsv = filter (hsv_of_bool ~red ~green ~blue) in
 	let {Color.HSV.hue; saturation; value} = unit_hsv in
@@ -25,7 +25,11 @@ let flat (filter: Color.hsv_t -> Color.hsv_t) ~(red: bool) ~(green: bool)
 		if value = 0. then 0. else
 		(1. -. black /. value) *. saturation
 	in
-	Color.rgb_of_hsv {Color.HSV.hue; saturation; value}
+	let rgb = Color.rgb_of_hsv {Color.HSV.hue; saturation; value} in
+	if not maximize_saturation || saturation = 0. then rgb else
+	(* maximize saturation in HSI *)
+	let hsi = Color.HSI.of_rgb rgb in
+	Color.HSI.to_rgb {hsi with Color.HSI.saturation = 1.}
 );;
 
 (* logic: luminance proportion / third / upper *)
@@ -39,17 +43,37 @@ end;; (* 10 times *)
 
 module HSY = Color.HSY (Luminance);;
 
-let make_rgb_with_luminance (unit_hsv: Color.hsv_t) (luminance: float) = (
+let make_rgb_with_luminance ~(maximize_saturation: bool)
+	(unit_hsv: Color.hsv_t) (black: float) (luminance: float) =
+(
 	let unit_rgb = Color.rgb_of_hsv unit_hsv in
 	let unit_hsy = HSY.of_rgb unit_rgb in
 	let hsy = {unit_hsy with HSY.intensity = luminance} in
-	HSY.to_rgb hsy
+	if maximize_saturation then HSY.to_rgb hsy else
+	let rec loop lo old_hsy hsy = (
+		let rgb = HSY.to_rgb hsy in
+		let open HSY in
+		if hsy.saturation -. lo < 0.0001 then rgb else
+		let min =
+			let open Color.RGB in
+			Float.min rgb.red (Float.min rgb.green rgb.blue)
+		in
+		if abs_float (black -. min) < 0.0001 then rgb else
+		let lo, old_hsy =
+			if min < black then lo, hsy else
+			hsy.saturation, old_hsy
+		in
+		let next_hsy = {old_hsy with saturation = (lo +. old_hsy.saturation) /. 2.} in
+		loop lo old_hsy next_hsy
+	) in
+	loop 0.0 hsy hsy
 );;
 
 (* luminance proportion:
    The changing of luminance from black to white is in direct proportion. *)
-let luminance_proportion (filter: Color.hsv_t -> Color.hsv_t) ~(red: bool)
-	~(green: bool) ~(blue: bool) (black: float) (white: float) =
+let luminance_proportion (filter: Color.hsv_t -> Color.hsv_t)
+	~(maximize_saturation: bool) ~(red: bool) ~(green: bool) ~(blue: bool)
+	(black: float) (white: float) =
 (
 	let seventh_num =
 		(if red then 2. else 0.)
@@ -59,14 +83,15 @@ let luminance_proportion (filter: Color.hsv_t -> Color.hsv_t) ~(red: bool)
 	in
 	let target = (white -. black) *. seventh_num /. 7. +. black in
 	let unit_hsv = filter (hsv_of_bool ~red ~green ~blue) in
-	make_rgb_with_luminance unit_hsv target
+	make_rgb_with_luminance ~maximize_saturation unit_hsv black target
 );;
 
 (* luminance third:
    Red, green, and blue have 1/3 luminance of between white and black.
    Yellow, magenta, and cyan have 2/3 luminance of between white and black. *)
-let luminance_third (filter: Color.hsv_t -> Color.hsv_t) ~(red: bool)
-	~(green: bool) ~(blue: bool) (black: float) (white: float) =
+let luminance_third (filter: Color.hsv_t -> Color.hsv_t)
+	~(maximize_saturation: bool) ~(red: bool) ~(green: bool) ~(blue: bool)
+	(black: float) (white: float) =
 (
 	let third_num =
 		let elt_count = Bool.to_int red + Bool.to_int green + Bool.to_int blue in
@@ -75,7 +100,7 @@ let luminance_third (filter: Color.hsv_t -> Color.hsv_t) ~(red: bool)
 	in
 	let target = (white -. black) *. third_num /. 3. +. black in
 	let unit_hsv = filter (hsv_of_bool ~red ~green ~blue) in
-	make_rgb_with_luminance unit_hsv target
+	make_rgb_with_luminance ~maximize_saturation unit_hsv black target
 );;
 
 (* luminance third mg:
@@ -83,8 +108,9 @@ let luminance_third (filter: Color.hsv_t -> Color.hsv_t) ~(red: bool)
    are swapped.
    Red, blue, and magenta have 1/3 luminance of between white and black.
    Green, Yellow, and cyan have 2/3 luminance of between white and black. *)
-let luminance_third_mg (filter: Color.hsv_t -> Color.hsv_t) ~(red: bool)
-	~(green: bool) ~(blue: bool) (black: float) (white: float) =
+let luminance_third_mg (filter: Color.hsv_t -> Color.hsv_t)
+	~(maximize_saturation: bool) ~(red: bool) ~(green: bool) ~(blue: bool)
+	(black: float) (white: float) =
 (
 	let third_num =
 		let elt_count = Bool.to_int red + Bool.to_int green + Bool.to_int blue in
@@ -96,14 +122,15 @@ let luminance_third_mg (filter: Color.hsv_t -> Color.hsv_t) ~(red: bool)
 	in
 	let target = (white -. black) *. third_num /. 3. +. black in
 	let unit_hsv = filter (hsv_of_bool ~red ~green ~blue) in
-	make_rgb_with_luminance unit_hsv target
+	make_rgb_with_luminance ~maximize_saturation unit_hsv black target
 );;
 
 (* luminance upper:
    Red, blue have same luminance as green.
    Magenta and cyan have same luminance as yellow. *)
-let luminance_upper (filter: Color.hsv_t -> Color.hsv_t) ~(red: bool)
-	~(green: bool) ~(blue: bool) (black: float) (white: float) =
+let luminance_upper (filter: Color.hsv_t -> Color.hsv_t)
+	~(maximize_saturation: bool) ~(red: bool) ~(green: bool) ~(blue: bool)
+	(black: float) (white: float) =
 (
 	let luminance_num =
 		let elt_count = Bool.to_int red + Bool.to_int green + Bool.to_int blue in
@@ -114,7 +141,7 @@ let luminance_upper (filter: Color.hsv_t -> Color.hsv_t) ~(red: bool)
 	in
 	let target = (white -. black) *. luminance_num /. Luminance.den +. black in
 	let unit_hsv = filter (hsv_of_bool ~red ~green ~blue) in
-	make_rgb_with_luminance unit_hsv target
+	make_rgb_with_luminance ~maximize_saturation unit_hsv black target
 );;
 
 (* filter: add hue *)
@@ -164,6 +191,7 @@ let grayscale_rgb_of_srgb24 (value: int) = (
 
 let logic = ref flat;;
 let filter = ref (fun x -> x);;
+let maximize_saturation = ref false;;
 
 let faint_min, faint_max = ref 0, ref 0;;
 let normal_min, normal_max = ref 0, ref 0xBF;;
@@ -188,8 +216,11 @@ let usage () = (
 	print_endline "  -T --luminance-third       use luminance third logic";
 	print_endline "     --luminance-third-mg    green and magenta are swapped";
 	print_endline "  -U --luminance-upper       use luminance upper logic";
-	print_endline "filter:";
+	print_endline "hue filter:";
 	print_endline "     --add-hue RAD  rotate hue by specified angle";
+	print_endline "saturation filter";
+	print_endline "     --adjust-black  adjust lower as black (default)";
+	print_endline "     --maximize-sat  maximize saturation";
 	print_endline "range:";
 	Printf.printf "     --faint  %s  set faint black and white (none)\n" range;
 	Printf.printf "     --normal %s  set normal black and white (%02X:%02X)\n"
@@ -255,6 +286,12 @@ try
 					filter := add_hue rad;
 					i + 2
 				)
+			| "--adjust-black" ->
+				maximize_saturation := false;
+				i + 1
+			| "--maximize-sat" ->
+				maximize_saturation := true;
+				i + 1
 			| "--faint" as option ->
 				if i + 1 >= Array.length Sys.argv then raise (Missing_value option) else
 				let min, max = parse_range ~min:!faint_min Sys.argv.(i + 1) in
@@ -314,7 +351,8 @@ with
 	exit 1;;
 
 let process prefix black white ~red ~green ~blue = (
-	let c = !logic !filter ~red ~green ~blue black white in
+	let maximize_saturation = !maximize_saturation in
+	let c = !logic !filter ~maximize_saturation ~red ~green ~blue black white in
 	let s = Color.SRGB24.of_rgb c in
 	let name = prefix ^ name ~red ~green ~blue in
 	let open Color.SRGB24 in
