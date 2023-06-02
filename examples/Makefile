@@ -2,20 +2,10 @@ BUILD:=$(shell $(CC) -dumpmachine)
 HOST=$(BUILD)
 TARGET=$(HOST)
 
-ifneq ($(TARGET),$(BUILD))
- PROGRAMPREFIX=$(TARGET)-
- BINLN=
-else
- PROGRAMPREFIX=
- ifneq ($(findstring mingw,$(BUILD))$(findstring msys,$(BUILD)),)
-  BINLN=
- else
-  BINLN=bin
- endif
-endif
+PROGRAMPREFIX=$(addsuffix -,$(filter-out $(BUILD),$(TARGET)))
 
 OCAMLC=$(PROGRAMPREFIX)ocamlc
-OCAMLOPT=$(if $(OCAMLC),$(OCAMLC:c=opt),$(PROGRAMPREFIX)ocamlopt)
+OCAMLOPT=$(or $(OCAMLC:c=opt),$(PROGRAMPREFIX)ocamlopt)
 RLWRAP?=
 
 OCAMLCFLAGS=
@@ -26,14 +16,17 @@ BUILDSUFFIX=.noindex
 BUILDDIR=$(TARGET)$(BUILDSUFFIX)
 COLOR_BUILDDIR=$(BUILDDIR)/color$(BUILDSUFFIX)
 
+BINLN=$(and $(filter $(BUILD),$(TARGET)), \
+        $(if $(findstring mingw,$(BUILD))$(findstring msys,$(BUILD)),,bin))
+
 EXAMPLES=$(basename $(wildcard *.ml))
 TESTS=$(filter test_%,$(EXAMPLES))
 
 .PHONY: all check interacitve clean $(TESTS)
 
 all: \
-	$(if $(OCAMLC),$(patsubst %,$(BUILDDIR)/%.byte.exe,$(EXAMPLES))) \
-	$(if $(OCAMLOPT),$(patsubst %,$(BUILDDIR)/%.opt.exe,$(EXAMPLES))) \
+	$(and $(OCAMLC),$(patsubst %,$(BUILDDIR)/%.byte.exe,$(EXAMPLES))) \
+	$(and $(OCAMLOPT),$(patsubst %,$(BUILDDIR)/%.opt.exe,$(EXAMPLES))) \
 	$(BINLN)
 
 $(BUILDDIR)/%.byte.exe: %.ml $(BUILDDIR)/color.cma
@@ -46,8 +39,8 @@ $(BUILDDIR)/%.opt.exe: %.ml $(BUILDDIR)/color.cmxa
 		-o $@ -I $(BUILDDIR) color.cmxa $(BUILDDIR)/$*.cmx \
 		$(addprefix -ccopt ,$(LDFLAGS)))
 
-$(if $(OCAMLC),$(BUILDDIR)/color.cma) \
-$(if $(OCAMLOPT),$(BUILDDIR)/color.cmxa)&: \
+$(and $(OCAMLC),$(BUILDDIR)/color.cma) \
+$(and $(OCAMLOPT),$(BUILDDIR)/color.cmxa)&: \
 		../source/color*
 	$(MAKE) $(strip \
 		-C ../source install \
@@ -60,20 +53,16 @@ $(BINLN):
 check: all $(TESTS)
 
 $(TESTS): %: \
-		$(if $(OCAMLC),$(BUILDDIR)/%.byte.exe) \
-		$(if $(OCAMLOPT),$(BUILDDIR)/%.opt.exe)
-ifneq ($(OCAMLC),)
-	$<
-endif
-ifneq ($(OCAMLOPT),)
-	$(BUILDDIR)/$*.opt.exe
-endif
+		$(and $(OCAMLC),$(BUILDDIR)/%.byte.exe) \
+		$(and $(OCAMLOPT),$(BUILDDIR)/%.opt.exe)
+	$(and $(OCAMLC),$<)
+	$(and $(OCAMLOPT),$(BUILDDIR)/$*.opt.exe)
 
 interactive: $(BUILDDIR)/color.cma
 	$(RLWRAP) ocaml -I $(BUILDDIR) $(OCAMLCFLAGS) color.cma
 
 clean:
-	-$(if $(BINLN),[ -h "$(BINLN)" ] && rm "$(BINLN)")
+	-$(and $(BINLN),[ -h "$(BINLN)" ] && rm "$(BINLN)")
 	-$(MAKE) $(strip \
 		-C ../source clean uninstall \
 		BUILDDIR=$(abspath $(COLOR_BUILDDIR)) \
