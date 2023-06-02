@@ -54,7 +54,7 @@ $(if $(OCAMLOPT),$(BUILDDIR)/color.cmxa)&: \
 		BUILDDIR=$(abspath $(COLOR_BUILDDIR)) \
 		INSTALLDIR=$(abspath $(BUILDDIR)))
 
-$(BINLN): | $(BUILDDIR)
+$(BINLN):
 	ln -s $(BUILDDIR) $@
 
 check: all $(TESTS)
