@@ -46,7 +46,9 @@ $(BUILDDIR)/%.opt.exe: %.ml $(BUILDDIR)/color.cmxa
 		-o $@ -I $(BUILDDIR) color.cmxa $(BUILDDIR)/$*.cmx \
 		$(addprefix -ccopt ,$(LDFLAGS)))
 
-$(BUILDDIR)/color.cma $(BUILDDIR)/color.cmxa&: ../source/color*
+$(if $(OCAMLC),$(BUILDDIR)/color.cma) \
+$(if $(OCAMLOPT),$(BUILDDIR)/color.cmxa)&: \
+		../source/color*
 	$(MAKE) $(strip \
 		-C ../source install \
 		BUILDDIR=$(abspath $(COLOR_BUILDDIR)) \
