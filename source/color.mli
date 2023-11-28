@@ -38,6 +38,8 @@ module type SRGB_IntS = sig
 	
 	val is_valid: t -> bool
 	val make: red:int -> green:int -> blue:int -> t
+	val black: t
+	val white: t
 	val of_srgb: srgb_t -> t
 	val to_srgb: t -> srgb_t
 	val of_rgb: rgb_t -> t

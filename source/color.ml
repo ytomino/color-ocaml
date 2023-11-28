@@ -83,6 +83,8 @@ module type SRGB_IntS = sig
 	
 	val is_valid: t -> bool
 	val make: red:int -> green:int -> blue:int -> t
+	val black: t
+	val white: t
 	val of_srgb: srgb_t -> t
 	val to_srgb: t -> srgb_t
 	val of_rgb: rgb_t -> t
@@ -101,6 +103,11 @@ module SRGB_Int (Param: sig val max_int: int end) = struct
 		let result = ({red; green; blue}: t) in
 		if is_valid result then result else
 		invalid_arg "SRGB_Int.make";;
+	
+	let black = ({red = 0; green = 0; blue = 0} : t);;
+	
+	let white =
+		({red = Param.max_int; green = Param.max_int; blue = Param.max_int}: t);;
 	
 	let of_srgb ({SRGB.red; green; blue} as x) =
 		if is_valid_srgb x then (
