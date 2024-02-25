@@ -30,11 +30,11 @@ all: \
 	$(BINLN)
 
 $(BUILDDIR)/%.byte.exe: %.ml $(BUILDDIR)/color.cma
-	$(OCAMLC) -c -o $(BUILDDIR)/$*.cmo -I $(BUILDDIR) $(OCAMLCFLAGS) $<
+	$(OCAMLC) -c $(OCAMLCFLAGS) -o $(BUILDDIR)/$*.cmo -I $(BUILDDIR) $<
 	$(OCAMLC) -o $@ -I $(BUILDDIR) color.cma $(BUILDDIR)/$*.cmo
 
 $(BUILDDIR)/%.opt.exe: %.ml $(BUILDDIR)/color.cmxa
-	$(OCAMLOPT) -c -o $(BUILDDIR)/$*.cmx -I $(BUILDDIR) $(OCAMLOPTFLAGS) $<
+	$(OCAMLOPT) -c $(OCAMLOPTFLAGS) -o $(BUILDDIR)/$*.cmx -I $(BUILDDIR) $<
 	$(OCAMLOPT) $(strip \
 		-o $@ -I $(BUILDDIR) color.cmxa $(BUILDDIR)/$*.cmx \
 		$(addprefix -ccopt ,$(LDFLAGS)))
@@ -59,7 +59,7 @@ $(TESTS): %: \
 	$(and $(OCAMLOPT),$(BUILDDIR)/$*.opt.exe)
 
 interactive: $(BUILDDIR)/color.cma
-	$(RLWRAP) ocaml -I $(BUILDDIR) $(OCAMLCFLAGS) color.cma
+	$(RLWRAP) ocaml $(OCAMLCFLAGS) -I $(BUILDDIR) color.cma
 
 clean:
 	-$(and $(BINLN),[ -h "$(BINLN)" ] && rm "$(BINLN)")
