@@ -26,4 +26,4 @@ for ired = 0 to 4 do
 	done
 done;;
 
-Printf.eprintf "ok\n";;
+prerr_endline "ok";;
