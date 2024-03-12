@@ -15,6 +15,7 @@ OCAMLCFLAGS=$(and $(filter-out 0,$(DEBUG)),-g)
 OCAMLOPTFLAGS=$(OCAMLCFLAGS)
 OCAMLCFLAGS_EXE=$(and $(filter-out 0,$(DEBUG)),-g)
 OCAMLOPTFLAGS_EXE=$(OCAMLCFLAGS_EXE) $(addprefix -ccopt ,$(LDFLAGS))
+OCAML_INCLUDE_FLAGS=
 LDFLAGS?=
 
 BUILDSUFFIX=.noindex
@@ -35,16 +36,20 @@ all: \
 	$(BINLN)
 
 $(BUILDDIR)/%.byte.exe: %.ml $(BUILDDIR)/color.cma
-	$(OCAMLC) -c $(OCAMLCFLAGS) -o $(BUILDDIR)/$*.cmo -I $(BUILDDIR) $<
+	$(OCAMLC) $(strip \
+		-c $(OCAMLCFLAGS) \
+		-o $(BUILDDIR)/$*.cmo $(OCAML_INCLUDE_FLAGS) -I $(BUILDDIR) $<)
 	$(OCAMLC) $(strip \
 		$(OCAMLCFLAGS_EXE) \
-		-o $@ -I $(BUILDDIR) color.cma $(BUILDDIR)/$*.cmo)
+		-o $@ $(OCAML_INCLUDE_FLAGS) -I $(BUILDDIR) color.cma $(BUILDDIR)/$*.cmo)
 
 $(BUILDDIR)/%.opt.exe: %.ml $(BUILDDIR)/color.cmxa
-	$(OCAMLOPT) -c $(OCAMLOPTFLAGS) -o $(BUILDDIR)/$*.cmx -I $(BUILDDIR) $<
+	$(OCAMLOPT) $(strip \
+		-c $(OCAMLOPTFLAGS) \
+		-o $(BUILDDIR)/$*.cmx $(OCAML_INCLUDE_FLAGS) -I $(BUILDDIR) $<)
 	$(OCAMLOPT) $(strip \
 		$(OCAMLOPTFLAGS_EXE) \
-		-o $@ -I $(BUILDDIR) color.cmxa $(BUILDDIR)/$*.cmx)
+		-o $@ $(OCAML_INCLUDE_FLAGS) -I $(BUILDDIR) color.cmxa $(BUILDDIR)/$*.cmx)
 
 $(and $(OCAMLC),$(BUILDDIR)/color.cma) \
 $(and $(OCAMLOPT),$(BUILDDIR)/color.cmxa)&: \
@@ -67,7 +72,8 @@ $(TESTS): %: \
 	$(and $(OCAMLOPT),$(BUILDDIR)/$*.opt.exe)
 
 interactive: $(BUILDDIR)/color.cma
-	$(RLWRAP) ocaml $(OCAMLCFLAGS) -I $(BUILDDIR) color.cma
+	$(RLWRAP) ocaml $(strip \
+		$(OCAMLCFLAGS) $(OCAML_INCLUDE_FLAGS) -I $(BUILDDIR) color.cma)
 
 clean:
 	-$(and $(BINLN),[ -h "$(BINLN)" ] && rm "$(BINLN)")
