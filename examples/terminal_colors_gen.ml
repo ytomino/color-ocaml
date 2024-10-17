@@ -255,7 +255,8 @@ let parse_range ~min arg = (
 		if String.length s > 0 then raise (not_hexadecimal_value arg) else
 		if v1 <= v2 then v1, v2 else
 		v2, v1
-	with Scanf.Scan_failure _ -> raise (not_hexadecimal_value arg)
+	with
+	| Scanf.Scan_failure _ -> raise (not_hexadecimal_value arg)
 ) in
 try
 	let rec parse_argv i = (
