@@ -138,7 +138,7 @@ module SRGB24 = Color__SRGB24;;
 
 (* HSV *)
 
-let min_max_3 red green blue =
+let min_max_3 (red: float) (green: float) (blue: float) =
 	if red <= green then (
 		if green <= blue then red, blue else
 		(* red, blue < green *)
